@@ -1,0 +1,26 @@
+---
+title: "Data analysis"
+output: html_document
+date: "2025-09-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+
+```{r}
+library("tidyverse")
+```
+
+
+Import raw data from xlsx files
+
+```{r}
+library(readxl)
+  Week_0<-read_excel
+  Week_2<-read_excel
+  Week_4<-read_excel
+  Week_6<-read_excel
+  
