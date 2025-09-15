@@ -8,10 +8,19 @@ date: "2025-09-12"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+install.packages("ggplot2")
+install.packages("patchwork")
+
+```
+
 Load packages
+
 
 ```{r}
 library("tidyverse")
+library("patchwork")
+library("RColorBrewer")
 ```
 
 
@@ -19,8 +28,204 @@ Import raw data from xlsx files
 
 ```{r}
 library(readxl)
-  Week_0<-read_excel
-  Week_2<-read_excel
-  Week_4<-read_excel
-  Week_6<-read_excel
+  Week_0<-read_excel("Week_0.xlsx")
   
+  Week_2<-read_excel("Week_2.xlsx")
+  
+  Week_4<-read_excel("Week_4.xlsx")
+  
+  Odd_Weeks<-read_excel("Odd_Weeks.xlsx")
+
+``` 
+
+
+Calculate survival rates. Survival rate is entered as a new vector in existing data frames
+
+```{r}
+Week_0<-Week_0 %>%
+  mutate(Survival=((Ind/Ind)*100))
+
+Week_2<-Week_2 %>%
+  mutate(Survival=((Ind/Week_0$Ind)*100))
+
+Week_4<-Week_4 %>%
+  mutate(Survival=((Ind/Week_0$Ind)*100))
+
+Odd_Weeks<-Odd_Weeks %>%
+  mutate(Survival=((Ind/Week_0$Ind)*100))
+
+```
+
+Calculate individual weight. Individual weight is entered as a new vector in existing data frames
+
+```{r}
+Week_0<-Week_0 %>%
+  mutate(Ind_W = W / Ind)
+
+Week_2<-Week_2 %>%
+  mutate(Ind_W = W / Ind)
+
+Week_4<-Week_4 %>%
+  mutate(Ind_W = W / Ind)
+
+```
+
+Calculate weight gain (WG), percentage weight gain (PWG) and specific growth rate (SGR)
+
+```{r}
+
+  
+WG_2<-(Week_2$Ind_W-Week_0$Ind_W)
+WG_2_4<-(Week_4$Ind_W-Week_2$Ind_W)
+WG_4<-(Week_4$Ind_W-Week_0$Ind_W)
+
+PWG_2<-((WG_2/Week_0$Ind_W)*100)
+PWG_2_4<-((WG_2_4/Week_2$Ind_W)*100)
+PWG_4<-((WG_4/Week_0$Ind_W)*100)
+
+SGR_2<-(((log(Week_2$Ind_W)-log(Week_0$Ind_W))/14)*100)
+SGR_2_4<-(((log(Week_4$Ind_W)-log(Week_2$Ind_W))/14)*100)
+SGR_4<-(((log(Week_4$Ind_W)-log(Week_0$Ind_W))/14)*100)
+
+Growth_Perf<-data.frame(Tmt=Week_0$Tmt,Rep=Week_0$Rep,Week=Week_0$Week,WG_2,PWG_2,
+SGR_2,WG_2_4,PWG_2_4,SGR_2_4,WG_4,PWG_4,SGR_4)
+
+Perf_week2 <- Growth_Perf %>% #New dataframes based on week
+  transmute(Tmt,
+            Week = 2,
+            WG = WG_2,
+            PWG = PWG_2,
+            SGR = SGR_2)
+
+Perf_week4 <- Growth_Perf %>% 
+  transmute(Tmt,
+            Week = 4,
+            WG = WG_4,
+            PWG = PWG_4,
+            SGR = SGR_4)
+
+Tidy_Growth_Perf <- bind_rows(Perf_week2, Perf_week4) #Combine into overarching dataframe
+
+  
+Growth_Perf_Mean <- Tidy_Growth_Perf %>% #Calculate mean growth performance metrics by treatment
+  group_by(Tmt,Week) %>%
+  summarise(
+    Mean_WG = mean(WG, na.rm = TRUE),
+    SD_WG = sd(WG, na.rm = TRUE),
+    Mean_PWG = mean(PWG, na.rm = TRUE),
+    SD_PWG = sd(PWG, na.rm = TRUE),
+    Mean_SGR = mean(SGR, na.rm = TRUE),
+    SD_SGR = sd(SGR, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+```
+
+---------------------------------------------------------------------------------
+Plots
+
+Plotting survival rates over time
+
+```{r}
+
+Survival_Rate<-bind_rows(Week_0,Week_2,Week_4,Odd_Weeks) %>%
+  select(Tmt,Rep,Week,Survival)
+
+Survival_Rate_mean <- Survival_Rate %>%
+  group_by(Tmt, Week) %>%
+  summarise(
+    Mean_Survival = mean(Survival, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(Survival_Rate_mean, aes(x=Week, y=Mean_Survival, color=Tmt)) +
+  geom_point() +
+  geom_line() +
+  labs(title="Survival rate over time", x="Week", y="Survival Rate (%)") +
+  scale_y_continuous(
+    breaks=c(0,20,40,60,80,100),
+    limits=c(0,100)
+    )+
+  theme_minimal()
+
+```
+
+Weight gain based on treatment
+
+```{r}
+
+ggplot(,aes(x=Tmt,y=WG,color=Tmt))+
+  geom_boxplot()+
+  labs(title="Weight gain from week 0 to week 2",x="Treatment",y="Weight gain (g)")+
+  theme_minimal()
+
+```
+
+Performance indices over time
+
+```{r}
+ggplot(Growth_Perf_Mean,aes(x=Week,y=Mean_WG,color=Tmt))+
+  geom_point()+
+  geom_line(aes(group=Tmt))+
+  theme_minimal()+
+  labs(title="Weight gain over time",x="Week",y="SGR (%/day)")+
+  theme(plot.title=element_text(size = 16, face = "bold",hjust=0.5))+
+  scale_x_continuous(
+    breaks=c(2,4,6),
+    limits=c(2,6)
+  )
+
+ggplot(Growth_Perf_Mean,aes(x=Week,y=Mean_PWG,color=Tmt))+
+  geom_point()+
+  geom_line(aes(group=Tmt))+
+  theme_minimal()+
+  labs(title="Percent weight gain over time",
+       x="Week",
+       y="SGR (%/day)")+
+  theme(plot.title=element_text(size = 16, face = "bold",hjust=0.5))+
+  scale_x_continuous(
+    breaks=c(2,4,6),
+    limits=c(2,6)
+  )
+
+
+ggplot(Growth_Perf_Mean,aes(x=Week,y=Mean_SGR,color=Tmt))+
+  geom_point()+
+  geom_line(aes(group=Tmt))+
+  theme_minimal()+
+  labs(title="Specific growth rate over time",
+       x="Week",
+       y="SGR (%/day)")+
+  theme(plot.title=element_text(size = 16, face = "bold",hjust=0.5))+
+  scale_x_continuous(
+    breaks=c(2,4,6),
+    limits=c(2,6)
+  )
+
+```
+
+Performance indices by treatment
+
+```{r}
+Growth_Perf_Mean %>%
+  filter(Week == 4) %>%
+ggplot(aes(x=Tmt,y=Mean_PWG,color=Tmt))+
+  geom_point()+
+  geom_errorbar(aes(ymin=Mean_PWG-SD_PWG,ymax=Mean_PWG+SD_PWG),width=0.2)+
+  labs(title="Percent weight gain at week 4",x="Treatment",y="Weight gain (g)")+
+  theme_minimal()
+
+
+```
+
+Plotting relationship between # of individuals and individual weight
+
+```{r}
+
+ggplot(Week_4,aes(x=Ind,y=Ind_W)) +
+  geom_point() +
+  geom_smooth() +
+  labs(title="Individual weight by # of individuals per tank ",x="# of Individuals",y="Individual weight (g)") +
+  theme_minimal()
+
+```
