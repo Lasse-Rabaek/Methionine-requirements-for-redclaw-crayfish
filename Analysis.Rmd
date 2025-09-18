@@ -7,6 +7,8 @@ date: "2025-09-12"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+---------------------------------------------------------------------------------
+Data wrangling
 
 Load packages
 
@@ -15,7 +17,6 @@ library("tidyverse")
 library("patchwork")
 library("RColorBrewer")
 ```
-
 
 Import raw data from xlsx files
 
@@ -99,8 +100,8 @@ Calculate mean and standard error values for survival and growth indices
 Mean_survival <- Data %>% #Calculate mean survival rate by treatment and week
   group_by(Tmt, Week) %>%
   summarise(
+    Survival_SE=sd(Survival)/sqrt(3),
     Survival = mean(Survival, na.rm = TRUE),
-    SE=sd(Survival)/sqrt(3),
     .groups = "drop"
   )
     
@@ -119,7 +120,6 @@ Mean_survival <- Data %>% #Calculate mean survival rate by treatment and week
     WG_TB_SE=sd(WG_TB,na.rm=TRUE)/sqrt(3),
     PWG_TB_mean = mean(PWG_TB, na.rm = TRUE),
     PWG_TB_SE=sd(PWG_TB,na.rm=TRUE)/sqrt(3),
-    
     .groups = "drop"
   )
 ```
@@ -145,6 +145,25 @@ ggplot(Mean_survival, aes(x=Week, y=Survival, color=Tmt)) +  #Survival rate over
 
 ```
 
+```{r}
+
+ggplot(Mean_survival, aes(x=Week, y=Survival, color=Tmt)) +  #Survival rate over time
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin=Survival-Survival_SE,
+                    ymax=Survival+Survival_SE),width=0.2)+
+  labs(title="Survival rate over time", 
+       x="Week", 
+       y="Survival Rate (%)") +
+  scale_y_continuous(
+    breaks=c(0,20,40,60,80,100),
+    limits=c(0,100)
+    )+
+  theme_minimal()+
+  theme(plot.title=element_text(size = 14, face = "bold",hjust=0.5))+
+  facet_wrap(~Tmt)
+
+```
 
 Performance indices over time
 
@@ -191,15 +210,137 @@ ggplot(Mean_growth,aes(x=Week,y=SGR_mean,color=Tmt))+  #SGR over time
 
 ```
 
-Performance indices by treatment
+Performance indices by treatment on an individual weight basis
 
 ```{r}
-Mean_growth %>%                             #PWG at week 2
+PWG_2<-Mean_growth %>%                             #PWG at week 2
   filter(Week == 2) %>%
 ggplot(aes(x=Tmt,y=PWG_mean,color=Tmt))+
   geom_point()+
   geom_errorbar(aes(ymin=PWG_mean-PWG_SE,
                     ymax=PWG_mean+PWG_SE),width=0.2)+
+  labs(x=NULL,y=NULL)+ #No x or y axis titles
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )+ 
+  theme_minimal()
+
+
+PWG_4<-Mean_growth %>%                             #PWG at week 4
+  filter(Week == 4) %>%
+ggplot(aes(x=Tmt,y=PWG_mean,color=Tmt))+
+  geom_point()+
+  geom_errorbar(aes(ymin=PWG_mean-PWG_SE,
+                    ymax=PWG_mean+PWG_SE),width=0.2)+
+  labs(x=NULL,y=NULL)+ #No x or y axis titles
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )+ 
+  theme_minimal()
+ 
+
+
+SGR_2<-Mean_growth %>%                             #SGR at week 2
+  filter(Week == 2) %>%
+ggplot(aes(x=Tmt,y=SGR_mean,color=Tmt))+
+  geom_point()+
+  geom_errorbar(aes(ymin=SGR_mean-SGR_SE,
+                    ymax=SGR_mean+SGR_SE),width=0.2)+
+  labs(x=NULL,y=NULL)+ #No x or y axis titles
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )+
+  scale_y_continuous(
+    limits=c(6,9)
+  )+
+  theme_minimal()
+  
+
+
+SGR_4<-Mean_growth %>%                             #SGR at week 4
+  filter(Week == 4) %>%
+ggplot(aes(x=Tmt,y=SGR_mean,color=Tmt))+
+  geom_point()+
+  geom_errorbar(aes(ymin=SGR_mean-SGR_SE,
+                    ymax=SGR_mean+SGR_SE),width=0.2)+
+  labs(x=NULL,y=NULL)+ #No x or y axis titles
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )+  
+  theme_minimal()
+  
+
+```
+
+Combine using the patchwork package
+
+```{r}
+
+PWG_2 <- PWG_2 + theme(legend.position = "none")  #Remove legends from individual plots
+PWG_4 <- PWG_4 + theme(legend.position = "none")
+SGR_2 <- SGR_2 + theme(legend.position = "none")
+SGR_4 <- SGR_4 + theme(legend.position = "none")
+
+
+top_row <- PWG_2 + PWG_4  # Collect into rows
+bottom_row <- SGR_2 + SGR_4 
+
+library(grid)  # For text manipulation
+
+final_plot <- (
+  (PWG_2+PWG_4)/(SGR_2+SGR_4)
+) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+# Add row and column labels
+col1_label <- wrap_elements(grid::textGrob("Week 2", gp = grid::gpar(fontsize = 10)))
+col2_label <- wrap_elements(grid::textGrob("Week 4", gp = grid::gpar(fontsize = 10)))
+row1_label <- wrap_elements(grid::textGrob("PWG (%)", rot = 90, gp = grid::gpar(fontsize = 10)))
+row2_label <- wrap_elements(grid::textGrob("SGR (%/day)", rot = 90, gp = grid::gpar(fontsize = 10)))
+
+design <- "
+ABC
+DEF
+GHI
+"
+
+final_plot <- (
+  plot_spacer()+col1_label + col2_label +
+  row1_label + PWG_2 + PWG_4 +
+  row2_label + SGR_2 + SGR_4
+) +
+  plot_layout(
+    design = design,
+    widths = c(0.05, 1, 1),  # manually force narrow first column
+    heights = c(0.1, 1, 1),
+    guides = "collect"
+  ) &
+  theme(
+    legend.position = "bottom",
+    legend.box.just = "center",
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+  )
+
+
+final_plot
+
+```
+
+Performance indices by treatment on a tank biomass basis
+
+```{r}
+Mean_growth %>%                             #PWG at week 2
+  filter(Week == 2) %>%
+ggplot(aes(x=Tmt,y=PWG_TB_mean,color=Tmt))+
+  geom_point()+
+  geom_errorbar(aes(ymin=PWG_TB_mean-PWG_TB_SE,
+                    ymax=PWG_TB_mean+PWG_TB_SE),width=0.2)+
   labs(title="Percent weight gain at week 2",
        x="Treatment",
        y="Weight gain (%)")+
@@ -209,56 +350,84 @@ ggplot(aes(x=Tmt,y=PWG_mean,color=Tmt))+
 
 Mean_growth %>%                             #PWG at week 4
   filter(Week == 4) %>%
-ggplot(aes(x=Tmt,y=PWG_mean,color=Tmt))+
+ggplot(aes(x=Tmt,y=PWG_TB_mean,color=Tmt))+
   geom_point()+
-  geom_errorbar(aes(ymin=PWG_mean-PWG_SE,
-                    ymax=PWG_mean+PWG_SE),width=0.2)+
+  geom_errorbar(aes(ymin=PWG_TB_mean-PWG_TB_SE,
+                    ymax=PWG_TB_mean+PWG_TB_SE),width=0.2)+
   labs(title="Percent weight gain at week 4",
        x="Treatment",
        y="Weight gain (%)")+
   theme_minimal()+
   theme(plot.title=element_text(size = 16, face = "bold",hjust=0.5))
-
-
-Mean_growth %>%                             #SGR at week 2
-  filter(Week == 2) %>%
-ggplot(aes(x=Tmt,y=SGR_mean,color=Tmt))+
-  geom_point()+
-  geom_errorbar(aes(ymin=SGR_mean-SGR_SE,
-                    ymax=SGR_mean+SGR_SE),width=0.2)+
-  labs(title="Specific growth rate at week 2",
-       x="Treatment",
-       y="SGR (%Growth/day")+
-  theme_minimal()+
-  theme(plot.title=element_text(size = 16, face = "bold",hjust=0.5))
-
-
-Mean_growth %>%                             #SGR at week 4
-  filter(Week == 4) %>%
-ggplot(aes(x=Tmt,y=SGR_mean,color=Tmt))+
-  geom_point()+
-  geom_errorbar(aes(ymin=SGR_mean-SGR_SE,
-                    ymax=SGR_mean+SGR_SE),width=0.2)+
-  labs(title="Specific growth rate at week 4",
-       x="Treatment",
-       y="SGR (%Growth/day)")+
-  theme_minimal()+
-  theme(plot.title=element_text(size = 16, face = "bold",hjust=0.5))
-
-
 ```
 
 Plotting relationship between # of individuals and individual weight
 
 ```{r}
+
 Data %>%
-  filter(!(Week %in% c(1,3))) %>%
+  filter(Week==2) %>%
 ggplot(aes(x=Ind,y=Ind_W)) +
   geom_point() +
   geom_smooth() +
-  labs(title="Individual weight by # of individuals per tank ",
-       x="# of Individuals",
+  labs(title="Individual weight by number of individuals per tank at week 2",
+       x="Number of individuals (n)",
        y="Individual weight (g)") +
+  theme(title=element_text(size = 14,
+                           face = "bold",
+                           hjust=0.5))+
   theme_minimal()
+
+Data %>%
+  filter(Week==4) %>%
+ggplot(aes(x=Ind,y=Ind_W)) +
+  geom_point() +
+  geom_smooth() +
+  labs(title="Individual weight by number of individuals per tank at week 4 ",
+       x="Number of Individuals (n)",
+       y="Individual weight (g)") +
+  theme(title=element_text(size = 14, face = "bold",hjust=0.5))+
+  theme_minimal()
+
+```
+
+---------------------------------------------------------------------------------
+
+Statistical tests
+
+
+ANOVA and Shapiro-Wilkes test on an individual weight basis
+
+```{r}
+library(agricolae)
+
+Data_4<-Data %>% filter(Week==4) #ANOVA for Week 4
+  
+PWG_aov_4 <- aov(PWG ~ Tmt, data =Data_4)  
+summary(PWG_aov_4)
+
+shapiro.test(residuals(PWG_aov_4))
+qqnorm(residuals(PWG_aov_4))
+qqline(residuals(PWG_aov_4))
+
+Data_4<-Data %>% filter(Week==4) #ANOVA SGR for Week 4
+  
+SGR_aov_4 <- aov(SGR ~ Tmt, data =Data_4)  
+summary(SGR_aov_4)
+
+shapiro.test(residuals(SGR_aov_4))
+qqnorm(residuals(SGR_aov_4))
+qqline(residuals(SGR_aov_4))
+```
+
+ANOVA and Tukey post-hoc test for percentage weight gain (PWG) on a tank biomass basis 
+
+```{r}
+PWG_TB_aov_4 <- aov(PWG_TB ~ Tmt, data =Data_4)  
+summary(PWG_TB_aov_4)
+
+shapiro.test(residuals(PWG_TB_aov_4))
+qqnorm(residuals(PWG_TB_aov_4))
+qqline(residuals(PWG_TB_aov_4))
 
 ```
